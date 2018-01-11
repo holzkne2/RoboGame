@@ -1,0 +1,70 @@
+﻿#pragma kernel Probablity
+#pragma kernel RandomPoints
+
+StructuredBuffer<float3> vertices;
+StructuredBuffer<int> indices;
+
+RWStructuredBuffer<float> prob;
+
+[numthreads(1,1,1)]
+void Probablity (uint3 id : SV_DispatchThreadID)
+{
+	float3 v1 = vertices[indices[id.x*3]];
+	float3 v2 = vertices[indices[id.x*3 + 1]];
+	float3 v3 = vertices[indices[id.x*3 + 2]];
+
+	float p = 0.5 * length(cross(v2 - v1, v3 - v1));
+	prob[id.x] = p;
+}
+
+StructuredBuffer<float3> normals;
+StructuredBuffer<float> randoms;
+RWStructuredBuffer<float3> points;
+RWStructuredBuffer<float3> points_normals;
+int probCount;
+float total;
+
+float rand(float2 co){
+      return abs(frac(sin(dot(co.xy ,float2(12.9898,78.233))) * 43758.5453));
+}
+
+
+uint Choose(uint id)
+{
+	float randomValue = randoms[id] * total;
+	for (uint i = 0; i < probCount; i++)
+	{
+		float p = prob[i];
+		if (randomValue < p)
+			return i;
+		randomValue -= p;
+	}
+	return probCount - 1;
+}
+
+[numthreads(16,1,1)]
+void RandomPoints (uint3 id : SV_DispatchThreadID)
+{
+	uint index = Choose(id.x);
+
+	float u = rand(randoms[id.x * 2]);
+	float v = rand(randoms[id.x * 3]);
+	if (u + v > 1)
+    {
+        u = 1 - u;
+        v = 1 - v;
+    }
+    float w = 1 - (u + v);
+
+	float3 v1 = vertices[indices[index*3]];
+	float3 v2 = vertices[indices[index*3 + 1]];
+	float3 v3 = vertices[indices[index*3 + 2]];
+
+	points[id.x] = (v1 * u) + (v2 * v) + (v3 * w);
+
+	float3 n1 = normals[indices[index*3]];
+	float3 n2 = normals[indices[index*3 + 1]];
+	float3 n3 = normals[indices[index*3 + 2]];
+
+	points_normals[id.x] = (n1 * u) + (n2 * v) + (n3 * w);
+}
